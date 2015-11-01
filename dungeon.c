@@ -50,7 +50,7 @@ cell_t *cell;
 	while (fgetc(stdin) != '\n');
 	level_size = length*width;
 	cells_n = levels_n*level_size;
-	cells = malloc(sizeof(cell_t)*cells_n);
+	cells = calloc(cells_n, sizeof(cell_t));
 	if (!cells) {
 		fprintf(stderr, "Could not allocate cells\n");
 		return EXIT_FAILURE;
@@ -80,12 +80,12 @@ cell_t *cell;
 	}
 	if (!search_path("THE QUEST", start, goal)) {
 		for (cell = goal; cell; cell = cell->from) {
-			if (cell->type == '*') {
-				cell->type = ' ';
-			}
-			else if (cell->type == 'M') {
+			if (cell->type == 'M') {
 				cell->type = ' ';
 				cell->full_extra = 0;
+			}
+			else if (cell->type == '*') {
+				cell->type = ' ';
 			}
 		}
 		for (i = 0; i < queue_size; i++) {
@@ -124,10 +124,13 @@ int read_cell(cell_t *cell, unsigned long level, unsigned long y, unsigned long 
 			goal = cell;
 		}
 		break;
-	case ' ':
 	case 'M':
+		cell->full_extra = level+1;
+		cell->extra = cell->full_extra;
+		break;
 	case 'D':
 	case 'U':
+	case ' ':
 	case '#':
 		break;
 	default:
@@ -135,10 +138,6 @@ int read_cell(cell_t *cell, unsigned long level, unsigned long y, unsigned long 
 		return 1;
 	}
 	if (cell->type != '#') {
-		cell->visited = 0;
-		cell->full_extra = cell->type == 'M' ? level+1:0;
-		cell->extra = cell->full_extra;
-		cell->links_n = 0;
 		if (level && level_links(&cells[cell_index(level-1, y, x)], cell)) {
 			return 1;
 		}
@@ -177,8 +176,8 @@ int side_link(cell_t *cell1, cell_t *cell2) {
 	switch (cell1->type) {
 	case 'S':
 	case 'G':
-	case ' ':
 	case 'M':
+	case ' ':
 		if (add_link(cell1, cell2)) {
 			return 1;
 		}
