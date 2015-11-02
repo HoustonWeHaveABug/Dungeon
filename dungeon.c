@@ -2,22 +2,29 @@
 #include <stdlib.h>
 
 typedef struct cell_s cell_t;
-struct cell_s {
+
+struct block_s {
 	int type;
+	cell_t *cell;
+};
+typedef struct block_s block_t;
+
+struct cell_s {
+	block_t *block;
 	unsigned long power;
 	int visited;
 	unsigned long full_extra;
 	unsigned long extra;
-	cell_t *from;
 	unsigned long links_n;
 	cell_t **links;
+	cell_t *from;
 };
 
-unsigned long cell_index(unsigned long, unsigned long, unsigned long);
-int read_cell(cell_t *, unsigned long, unsigned long, unsigned long, int);
-int level_links(cell_t *, cell_t *);
-int side_links(cell_t *, cell_t *);
-int side_link(cell_t *, cell_t *);
+int set_block(block_t *, int);
+int set_cell(cell_t *, unsigned long, unsigned long, unsigned long, block_t *);
+int level_links(block_t *, cell_t *);
+int yx_links(block_t *, cell_t *);
+int yx_link(block_t *, cell_t *);
 int add_link(cell_t *, cell_t *);
 int search_path(const char *, cell_t *, cell_t *);
 void add_to_queue(cell_t *);
@@ -25,14 +32,15 @@ void test_link(cell_t *, cell_t *);
 void reset_cell(cell_t *);
 void free_cells(unsigned long);
 
-unsigned long levels_n, length, width, power, level_size, queue_size;
+unsigned long levels, length, width, power, level_size, cells_n, queue_size;
+block_t *blocks;
 cell_t *cells, *start, *goal, **queue;
 
 int main(void) {
-unsigned long cells_n, n, i, j, k;
+unsigned long blocks_n, b, c, i, j, k;
 cell_t *cell;
-	scanf("%lu", &levels_n);
-	if (!levels_n) {
+	scanf("%lu", &levels);
+	if (!levels) {
 		fprintf(stderr, "Number of levels must be greater than 0\n");
 		return EXIT_FAILURE;
 	}
@@ -47,45 +55,88 @@ cell_t *cell;
 		return EXIT_FAILURE;
 	}
 	scanf("%lu", &power);
-	while (fgetc(stdin) != '\n');
-	level_size = length*width;
-	cells_n = levels_n*level_size;
-	cells = calloc(cells_n, sizeof(cell_t));
+	fgetc(stdin);
+	level_size = width*length;
+	blocks_n = level_size*levels;
+	blocks = malloc(sizeof(block_t)*blocks_n);
+	if (!blocks) {
+		fprintf(stderr, "Could not allocate blocks\n");
+		return EXIT_FAILURE;
+	}
+	cells_n = 0;
+	b = 0;
+	for (i = 0; i < levels; i++) {
+		for (j = 0; j < length; j++) {
+			for (k = 0; k < width; k++) {
+				if (set_block(&blocks[b], fgetc(stdin))) {
+					free(blocks);
+					return EXIT_FAILURE;
+				}
+				b++;
+			}
+			fgetc(stdin);
+		}
+		if (i < levels-1) {
+			fgetc(stdin);
+		}
+	}
+	cells = malloc(sizeof(cell_t)*cells_n);
 	if (!cells) {
 		fprintf(stderr, "Could not allocate cells\n");
+		free(blocks);
 		return EXIT_FAILURE;
 	}
 	start = NULL;
 	goal = NULL;
 	queue_size = 0;
-	for (i = 0; i < levels_n; i++) {
+	b = 0;
+	c = 0;
+	for (i = 0; i < levels; i++) {
 		for (j = 0; j < length; j++) {
 			for (k = 0; k < width; k++) {
-				n = cell_index(i, j, k);
-				if (read_cell(&cells[n], i, j, k, fgetc(stdin))) {
-					free_cells(n);
-					return EXIT_FAILURE;
+				if (blocks[b].type == '#') {
+					blocks[b].cell = NULL;
 				}
+				else {
+					blocks[b].cell = &cells[c];
+					if (set_cell(&cells[c], i, j, k, &blocks[b])) {
+						free_cells(cells_n);
+						free(blocks);
+						return EXIT_FAILURE;
+					}
+					c++;
+				}
+				b++;
 			}
-			while (fgetc(stdin) != '\n');
 		}
-		if (i < levels_n-1) {
-			while (fgetc(stdin) != '\n');
-		}
+	}
+	if (!start) {
+		fprintf(stderr, "Start not set\n");
+		free_cells(cells_n);
+		free(blocks);
+		return EXIT_FAILURE;
+	}
+	if (!goal) {
+		fprintf(stderr, "Goal not set\n");
+		free_cells(cells_n);
+		free(blocks);
+		return EXIT_FAILURE;
 	}
 	queue = malloc(sizeof(cell_t *)*queue_size);
 	if (!queue) {
 		fprintf(stderr, "Could not allocate queue\n");
+		free_cells(cells_n);
+		free(blocks);
 		return EXIT_FAILURE;
 	}
 	if (!search_path("THE QUEST", start, goal)) {
 		for (cell = goal; cell; cell = cell->from) {
-			if (cell->type == 'M') {
-				cell->type = ' ';
+			if (cell->block->type == 'M') {
+				cell->block->type = ' ';
 				cell->full_extra = 0;
 			}
-			else if (cell->type == '*') {
-				cell->type = ' ';
+			else if (cell->block->type == '*') {
+				cell->block->type = ' ';
 			}
 		}
 		for (i = 0; i < queue_size; i++) {
@@ -95,39 +146,15 @@ cell_t *cell;
 	}
 	free(queue);
 	free_cells(cells_n);
+	free(blocks);
 	return EXIT_SUCCESS;
 }
 
-unsigned long cell_index(unsigned long level, unsigned long y, unsigned long x) {
-	return level*level_size+y*width+x;
-}
-
-int read_cell(cell_t *cell, unsigned long level, unsigned long y, unsigned long x, int type) {
-	cell->type = type;
-	switch (cell->type) {
+int set_block(block_t *block, int type) {
+	switch (type) {
 	case 'S':
-		if (start) {
-			fprintf(stderr, "Start already set\n");
-			return 1;
-		}
-		else {
-			start = cell;
-			cell->power = power;
-		}
-		break;
 	case 'G':
-		if (goal) {
-			fprintf(stderr, "Goal already set\n");
-			return 1;
-		}
-		else {
-			goal = cell;
-		}
-		break;
 	case 'M':
-		cell->full_extra = level+1;
-		cell->extra = cell->full_extra;
-		break;
 	case 'D':
 	case 'U':
 	case ' ':
@@ -137,48 +164,79 @@ int read_cell(cell_t *cell, unsigned long level, unsigned long y, unsigned long 
 		fprintf(stderr, "Invalid type\n");
 		return 1;
 	}
-	if (cell->type != '#') {
-		if (level && level_links(&cells[cell_index(level-1, y, x)], cell)) {
-			return 1;
-		}
-		if (y && side_links(&cells[cell_index(level, y-1, x)], cell)) {
-			return 1;
-		}
-		if (x && side_links(&cells[cell_index(level, y, x-1)], cell)) {
-			return 1;
-		}
-		queue_size += 1+cell->full_extra;
+	block->type = type;
+	if (type != '#') {
+		cells_n++;
 	}
 	return 0;
 }
 
-int level_links(cell_t *cell1, cell_t *cell2) {
-	if (cell1->type == 'D' && add_link(cell1, cell2)) {
+int set_cell(cell_t *cell, unsigned long level, unsigned long y, unsigned long x, block_t *block) {
+	block->cell = cell;
+	cell->block = block;
+	if (block->type == 'S') {
+		if (start) {
+			fprintf(stderr, "Start already set\n");
+			return 1;
+		}
+		else {
+			start = cell;
+			cell->power = power;
+		}
+	}
+	else if (block->type == 'G') {
+		if (goal) {
+			fprintf(stderr, "Goal already set\n");
+			return 1;
+		}
+		else {
+			goal = cell;
+		}
+	}
+	cell->visited = 0;
+	cell->full_extra = block->type == 'M' ? level+1:0;
+	cell->extra = cell->full_extra;
+	cell->links_n = 0;
+	if (level && level_links(block-level_size, cell)) {
 		return 1;
 	}
-	if (cell1->type != '#' && cell2->type == 'U' && add_link(cell2, cell1)) {
+	if (y && yx_links(block-width, cell)) {
+		return 1;
+	}
+	if (x && yx_links(block-1, cell)) {
+		return 1;
+	}
+	queue_size += 1+cell->full_extra;
+	return 0;
+}
+
+int level_links(block_t *remote, cell_t *cell) {
+	if (remote->type == 'D' && add_link(remote->cell, cell)) {
+		return 1;
+	}
+	if (remote->cell && cell->block->type == 'U' && add_link(cell, remote->cell)) {
 		return 1;
 	}
 	return 0;
 }
 
-int side_links(cell_t *cell1, cell_t *cell2) {
-	if (side_link(cell1, cell2)) {
+int yx_links(block_t *remote, cell_t *cell) {
+	if (yx_link(remote, cell)) {
 		return 1;
 	}
-	if (cell1->type != '#' && side_link(cell2, cell1)) {
+	if (remote->cell && yx_link(cell->block, remote->cell)) {
 		return 1;
 	}
 	return 0;
 }
 
-int side_link(cell_t *cell1, cell_t *cell2) {
-	switch (cell1->type) {
+int yx_link(block_t *block1, cell_t *cell2) {
+	switch (block1->type) {
 	case 'S':
 	case 'G':
 	case 'M':
 	case ' ':
-		if (add_link(cell1, cell2)) {
+		if (add_link(block1->cell, cell2)) {
 			return 1;
 		}
 	}
@@ -210,7 +268,7 @@ cell_t **links_tmp;
 }
 
 int search_path(const char *name, cell_t *first, cell_t *last) {
-unsigned long i, j, k;
+unsigned long b, i, j, k;
 cell_t *cell;
 	first->visited = 1;
 	first->from = NULL;
@@ -231,18 +289,19 @@ cell_t *cell;
 	printf("\n%s\n\n", name);
 	if (i < queue_size) {
 		for (cell = last; cell; cell = cell->from) {
-			if (cell->type == ' ') {
-				cell->type = '*';
+			if (cell->block->type == ' ') {
+				cell->block->type = '*';
 			}
 		}
-		for (i = 0; i < levels_n; i++) {
+		b = 0;
+		for (i = 0; i < levels; i++) {
 			for (j = 0; j < length; j++) {
 				for (k = 0; k < width; k++) {
-					putchar(cells[cell_index(i, j, k)].type);
+					putchar(blocks[b++].type);
 				}
 				puts("");
 			}
-			if (i < levels_n-1) {
+			if (i < levels-1) {
 				puts("");
 			}
 		}
@@ -269,7 +328,7 @@ void test_link(cell_t *from, cell_t *link) {
 
 void reset_cell(cell_t *cell) {
 	cell->visited = 0;
-	if (cell->type == 'M') {
+	if (cell->block->type == 'M') {
 		cell->extra = cell->full_extra;
 	}
 }
