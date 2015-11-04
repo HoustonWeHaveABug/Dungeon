@@ -67,12 +67,11 @@ cell_t *cell;
 	b = 0;
 	for (i = 0; i < height; i++) {
 		for (j = 0; j < length; j++) {
-			for (k = 0; k < width; k++) {
+			for (k = 0; k < width; k++, b++) {
 				if (set_block(&blocks[b], fgetc(stdin))) {
 					free(blocks);
 					return EXIT_FAILURE;
 				}
-				b++;
 			}
 			fgetc(stdin);
 		}
@@ -93,7 +92,7 @@ cell_t *cell;
 	c = 0;
 	for (i = 0; i < height; i++) {
 		for (j = 0; j < length; j++) {
-			for (k = 0; k < width; k++) {
+			for (k = 0; k < width; k++, b++) {
 				if (blocks[b].type != '#') {
 					if (set_cell(&cells[c], i, j, k, &blocks[b])) {
 						free_cells();
@@ -102,7 +101,6 @@ cell_t *cell;
 					}
 					c++;
 				}
-				b++;
 			}
 		}
 	}
@@ -127,11 +125,19 @@ cell_t *cell;
 	}
 	if (!search_path("THE QUEST", start, goal)) {
 		for (cell = goal; cell; cell = cell->from) {
-			if (cell->block->type == 'M') {
+			switch (cell->block->type) {
+			case 'M':
 				cell->block->type = '.';
 				cell->cost = 0;
-			}
-			else if (cell->block->type == '*') {
+				cell->cost_tmp = 0;
+				break;
+			case 'D':
+				cell->block->type = 'd';
+				break;
+			case 'U':
+				cell->block->type = 'u';
+				break;
+			case '*':
 				cell->block->type = '.';
 			}
 		}
@@ -150,9 +156,9 @@ int set_block(block_t *block, int type) {
 	switch (type) {
 	case 'S':
 	case 'G':
-	case 'M':
-	case 'D':
-	case 'U':
+	case 'm':
+	case 'd':
+	case 'u':
 	case '.':
 		cells_n++;
 		break;
@@ -190,7 +196,7 @@ int set_cell(cell_t *cell, unsigned long z, unsigned long y, unsigned long x, bl
 		}
 	}
 	cell->visited = 0;
-	cell->cost = block->type == 'M' ? z+1:0;
+	cell->cost = block->type == 'm' ? z+1:0;
 	cell->cost_tmp = cell->cost;
 	cell->links_n = 0;
 	if (z && z_links(block-surface, cell)) {
@@ -207,10 +213,10 @@ int set_cell(cell_t *cell, unsigned long z, unsigned long y, unsigned long x, bl
 }
 
 int z_links(block_t *remote, cell_t *cell) {
-	if (remote->type == 'D' && add_link(remote->cell, cell)) {
+	if (remote->type == 'd' && add_link(remote->cell, cell)) {
 		return 1;
 	}
-	if (remote->cell && cell->block->type == 'U' && add_link(cell, remote->cell)) {
+	if (remote->cell && cell->block->type == 'u' && add_link(cell, remote->cell)) {
 		return 1;
 	}
 	return 0;
@@ -230,7 +236,7 @@ int yx_link(block_t *block1, cell_t *cell2) {
 	switch (block1->type) {
 	case 'S':
 	case 'G':
-	case 'M':
+	case 'm':
 	case '.':
 		if (add_link(block1->cell, cell2)) {
 			return 1;
@@ -285,15 +291,25 @@ cell_t *cell;
 	printf("\n%s\n\n", name);
 	if (i < queue_size) {
 		for (cell = last; cell; cell = cell->from) {
-			if (cell->block->type == '.') {
+			switch (cell->block->type) {
+			case 'm':
+				cell->block->type = 'M';
+				break;
+			case 'd':
+				cell->block->type = 'D';
+				break;
+			case 'u':
+				cell->block->type = 'U';
+				break;
+			case '.':
 				cell->block->type = '*';
 			}
 		}
 		b = 0;
 		for (i = 0; i < height; i++) {
 			for (j = 0; j < length; j++) {
-				for (k = 0; k < width; k++) {
-					putchar(blocks[b++].type);
+				for (k = 0; k < width; k++, b++) {
+					putchar(blocks[b].type);
 				}
 				puts("");
 			}
@@ -324,7 +340,7 @@ void test_link(cell_t *from, cell_t *link) {
 
 void reset_cell(cell_t *cell) {
 	cell->visited = 0;
-	if (cell->block->type == 'M') {
+	if (cell->block->type == 'm') {
 		cell->cost_tmp = cell->cost;
 	}
 }
