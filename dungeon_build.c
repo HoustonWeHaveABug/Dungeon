@@ -24,12 +24,12 @@ unsigned long height, length, width, wall1, wall2, monster, down, up, empty, sur
 	}
 	scanf("%lu", &wall1);
 	if (wall1 > 100) {
-		fprintf(stderr, "Wall start must be lower than or equal to 100\n");
+		fprintf(stderr, "Wall starts probability must be lower than or equal to 100\n");
 		return EXIT_FAILURE;
 	}
 	scanf("%lu", &wall2);
 	if (wall2 > 100) {
-		fprintf(stderr, "Wall row must be lower than or equal to 100\n");
+		fprintf(stderr, "Wall continues probability must be lower than or equal to 100\n");
 		return EXIT_FAILURE;
 	}
 	surface = width*length;
@@ -46,13 +46,13 @@ unsigned long height, length, width, wall1, wall2, monster, down, up, empty, sur
 			for (k = 0; k < width; k++, n++) {
 				blocks[n] = '.';
 				walls = 0;
-				if (j && k && blocks[n-width-1] == '#') {
+				if (!j || !k || blocks[n-width-1] == '#') {
 					walls += 4;
 				}
-				if (j && blocks[n-width] == '#') {
+				if (!j || blocks[n-width] == '#') {
 					walls += 2;
 				}
-				if (k && blocks[n-1] == '#') {
+				if (!k || blocks[n-1] == '#') {
 					walls++;
 				}
 				if (walls == 3) {
