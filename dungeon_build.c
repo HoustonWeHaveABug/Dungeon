@@ -59,7 +59,7 @@ unsigned long height, length, width, wall1, wall2, monster, down, up, empty, sur
 					blocks[n] = '#';
 				}
 				else if (walls != 4 && walls != 7) {
-					r = erand(100);
+					r = erand(100UL);
 					if (walls) {
 						if (r < wall2) {
 							blocks[n] = '#';
